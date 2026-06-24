@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AiHealth Dashboard Helpline</title>
+<style>
+  :root { --bg:#f6f8fb; --card:#fff; --ink:#1f2430; --muted:#6b7280; --brand:#2f6df6; --brandink:#fff; --line:#e6e9ef; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif; background:var(--bg); color:var(--ink); }
+  .wrap { max-width:760px; margin:0 auto; height:100vh; display:flex; flex-direction:column; }
+  header { padding:18px 20px; border-bottom:1px solid var(--line); background:var(--card); }
+  header h1 { font-size:17px; margin:0; }
+  header p { margin:3px 0 0; font-size:13px; color:var(--muted); }
+  #log { flex:1; overflow-y:auto; padding:20px; display:flex; flex-direction:column; gap:14px; }
+  .msg { max-width:85%; padding:12px 14px; border-radius:14px; font-size:14.5px; line-height:1.5; white-space:normal; }
+  .user { align-self:flex-end; background:var(--brand); color:var(--brandink); border-bottom-right-radius:4px; }
+  .bot { align-self:flex-start; background:var(--card); border:1px solid var(--line); border-bottom-left-radius:4px; }
+  .bot ol, .bot ul { margin:8px 0; padding-left:22px; }
+  .bot li { margin:3px 0; }
+  .bot p { margin:6px 0; }
+  .bot .tip { margin-top:8px; font-size:13.5px; color:var(--muted); }
+  .typing { color:var(--muted); font-style:italic; }
+  form { display:flex; gap:10px; padding:14px 16px; border-top:1px solid var(--line); background:var(--card); }
+  input { flex:1; padding:12px 14px; border:1px solid var(--line); border-radius:10px; font-size:14.5px; outline:none; }
+  input:focus { border-color:var(--brand); }
+  button { padding:0 18px; border:0; border-radius:10px; background:var(--brand); color:#fff; font-size:14.5px; font-weight:600; cursor:pointer; }
+  button:disabled { opacity:.5; cursor:default; }
+  .chips { display:flex; flex-wrap:wrap; gap:8px; padding:0 20px 4px; }
+  .chip { font-size:12.5px; border:1px solid var(--line); background:var(--card); border-radius:999px; padding:6px 11px; cursor:pointer; color:var(--ink); }
+  .chip:hover { border-color:var(--brand); color:var(--brand); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>AiHealth Dashboard Helpline</h1>
+    <p>Ask how to do anything in the dashboard — I'll walk you through it step by step.</p>
+  </header>
+  <div id="log"></div>
+  <div class="chips" id="chips">
+    <div class="chip">Where do I find a patient's SMBG report?</div>
+    <div class="chip">How do I assign a package to a patient?</div>
+    <div class="chip">How do I chat with a patient's documents?</div>
+    <div class="chip">A patient's glucose isn't syncing — what do I check?</div>
+  </div>
+  <form id="form">
+    <input id="input" autocomplete="off" placeholder="Type your question…" />
+    <button id="send" type="submit">Send</button>
+  </form>
+</div>
+
+<script>
+const log = document.getElementById('log');
+const form = document.getElementById('form');
+const input = document.getElementById('input');
+const sendBtn = document.getElementById('send');
+const chips = document.getElementById('chips');
+let history = [];
+
+// Tiny, safe markdown -> HTML (escape first, then format bold, numbered & bullet lists).
+function render(md) {
+  let s = md.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  const lines = s.split('\n');
+  let html = '', list = null;
+  const close = () => { if (list) { html += `</${list}>`; list = null; } };
+  for (const line of lines) {
+    const ol = line.match(/^\s*\d+\.\s+(.*)/);
+    const ul = line.match(/^\s*[-*]\s+(.*)/);
+    const tip = line.match(/^\s*Tip:\s*(.*)/i);
+    if (ol) { if (list !== 'ol') { close(); html += '<ol>'; list = 'ol'; } html += `<li>${ol[1]}</li>`; }
+    else if (ul) { if (list !== 'ul') { close(); html += '<ul>'; list = 'ul'; } html += `<li>${ul[1]}</li>`; }
+    else if (tip) { close(); html += `<p class="tip">💡 ${tip[1]}</p>`; }
+    else if (line.trim() === '') { close(); }
+    else { close(); html += `<p>${line}</p>`; }
+  }
+  close();
+  return html;
+}
+
+function addUser(text) {
+  const el = document.createElement('div');
+  el.className = 'msg user';
+  el.textContent = text;
+  log.appendChild(el);
+  log.scrollTop = log.scrollHeight;
+}
+function addBot(html, typing=false) {
+  const el = document.createElement('div');
+  el.className = 'msg bot' + (typing ? ' typing' : '');
+  el.innerHTML = html;
+  log.appendChild(el);
+  log.scrollTop = log.scrollHeight;
+  return el;
+}
+
+async function ask(text) {
+  addUser(text);
+  history.push({ role:'user', content:text });
+  const thinking = addBot('typing…', true);
+  sendBtn.disabled = true;
+  try {
+    const r = await fetch('/chat', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ message:text, history: history.slice(0,-1) })
+    });
+    const data = await r.json();
+    thinking.classList.remove('typing');
+    thinking.innerHTML = render(data.reply);
+    history.push({ role:'assistant', content:data.reply });
+  } catch (e) {
+    thinking.classList.remove('typing');
+    thinking.textContent = 'Network error — is the server running?';
+  } finally {
+    sendBtn.disabled = false;
+    log.scrollTop = log.scrollHeight;
+  }
+}
+
+form.addEventListener('submit', (e) => {
+  e.preventDefault();
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  chips.style.display = 'none';
+  ask(text);
+});
+chips.addEventListener('click', (e) => {
+  if (e.target.classList.contains('chip')) {
+    chips.style.display = 'none';
+    ask(e.target.textContent);
+  }
+});
+</script>
+</body>
+</html>
