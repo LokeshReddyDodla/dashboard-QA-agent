@@ -1,5 +1,27 @@
+# ---- Secrets: NEVER commit these ----
 .env
+.env.*
+!.env.example          # the template (placeholders only) is safe to commit
+*.key
+*.pem
+*.p12
+*_secret*
+*secret*.json
+credentials*.json
+service-account*.json
+.doppler/
+
+# ---- Python ----
 __pycache__/
 *.pyc
+*.pyo
 .venv/
 venv/
+env/
+.pytest_cache/
+
+# ---- OS / editor ----
+.DS_Store
+.idea/
+.vscode/
+*.log
