@@ -20,6 +20,9 @@
   .bot li { margin:3px 0; }
   .bot p { margin:6px 0; }
   .bot .tip { margin-top:8px; font-size:13.5px; color:var(--muted); }
+  .bot .video { margin-top:10px; }
+  .bot .video-label { font-size:12.5px; font-weight:600; color:var(--brand); margin-bottom:5px; }
+  .bot .video video { width:100%; max-width:420px; border-radius:10px; border:1px solid var(--line); background:#000; display:block; }
   .typing { color:var(--muted); font-style:italic; }
   form { display:flex; gap:10px; padding:14px 16px; border-top:1px solid var(--line); background:var(--card); }
   input { flex:1; padding:12px 14px; border:1px solid var(--line); border-radius:10px; font-size:14.5px; outline:none; }
@@ -108,7 +111,12 @@ async function ask(text) {
     });
     const data = await r.json();
     thinking.classList.remove('typing');
-    thinking.innerHTML = render(data.reply);
+    let html = render(data.reply);
+    if (data.video_url) {
+      html += `<div class="video"><div class="video-label">▶ Watch how</div>`
+            + `<video controls preload="metadata" src="${data.video_url}"></video></div>`;
+    }
+    thinking.innerHTML = html;
     history.push({ role:'assistant', content:data.reply });
   } catch (e) {
     thinking.classList.remove('typing');
